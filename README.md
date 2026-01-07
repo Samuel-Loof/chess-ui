@@ -39,5 +39,3 @@ NEXT_PUBLIC_OPENAI_API_KEY=your_key_here
 1. Enter your OpenAI API key
 2. Select an AI opponent
 3. Play chess!
-
-See [main project](https://github.com/yourusername/chess-game-cef) for full details.
