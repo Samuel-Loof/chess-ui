@@ -7,12 +7,17 @@ import { AIOpponent, AI_OPPONENTS, AIPersonality } from "./AIOpponent";
 import SettingsPanel from "./SettingsPanel";
 import { soundManager } from "../utils/sounds";
 import { getLastMoveStyles } from "../utils/moveHighlight";
+import GameOverModal from "./GameOverModal";
 
 export default function ChessBoard() {
   // Game state
   const [game, setGame] = useState(new Chess());
   const [currentTurn, setCurrentTurn] = useState<"w" | "b">("w");
   const [gameStatus, setGameStatus] = useState<string>("");
+  const [gameOver, setGameOver] = useState<{
+    isOver: boolean;
+    winner: "white" | "black" | "draw";
+  } | null>(null);
 
   // Click-to-move state
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
@@ -32,10 +37,10 @@ export default function ChessBoard() {
   const [soundVolume, setSoundVolume] = useState(0.5);
   const [chatVisible, setChatVisible] = useState(true);
 
-  // NEW: Move highlight state
+  // Move highlight state
   const [lastMove, setLastMove] = useState<{ from?: string; to?: string }>({});
 
-  // NEW: Typing animation state
+  //Typing animation state
   const [currentComment, setCurrentComment] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
@@ -51,7 +56,7 @@ export default function ChessBoard() {
     }
   }, [currentTurn, playingAgainstAI, aiOpponent]);
 
-  // NEW: Update sound manager when settings change
+  // Update sound manager when settings change
   useEffect(() => {
     soundManager.setEnabled(soundEnabled);
     soundManager.setVolume(soundVolume);
@@ -62,7 +67,13 @@ export default function ChessBoard() {
     if (currentComment && isTyping) {
       const fullText = currentComment;
       let index = 0;
-      setAiComments((prev) => [...prev.slice(0, -1), ""]);
+
+      // Start with empty string for the last message
+      setAiComments((prev) => {
+        const newComments = [...prev];
+        newComments[newComments.length - 1] = ""; // Clear last message for typing
+        return newComments;
+      });
 
       const intervalId = setInterval(() => {
         if (index < fullText.length) {
@@ -99,7 +110,6 @@ export default function ChessBoard() {
     resetGame();
   }
 
-  // AI makes its move
   async function makeAIMove() {
     setAiThinking(true);
 
@@ -109,7 +119,7 @@ export default function ChessBoard() {
       // Make the move
       const moveResult = game.move(move);
       if (moveResult) {
-        // NEW: Play appropriate sound
+        // Play appropriate sound
         if (moveResult.captured) {
           soundManager.play("capture");
         } else if (
@@ -121,19 +131,21 @@ export default function ChessBoard() {
           soundManager.play("move");
         }
 
-        // NEW: Update last move highlight
+        // Update last move highlight
         setLastMove({ from: moveResult.from, to: moveResult.to });
 
         setGame(new Chess(game.fen()));
         setCurrentTurn(game.turn());
         updateGameStatus();
 
-        // NEW: Add AI's comment with typing animation
+        // FIXED: Add typing animation WITHOUT empty placeholder first
         soundManager.play("ai-talk");
         const fullComment = `${selectedAI.name}: ${comment}`;
         setCurrentComment(fullComment);
         setIsTyping(true);
-        setAiComments((prev) => [...prev, ""]); // Placeholder for typing
+
+        // Add the message immediately, typing effect will fill it in
+        setAiComments((prev) => [...prev, fullComment]);
       }
     } catch (error) {
       console.error("AI move error:", error);
@@ -152,11 +164,11 @@ export default function ChessBoard() {
       try {
         const reaction = await aiOpponent.reactToMove(game, playerMove);
 
-        // NEW: Add with typing animation
+        // FIXED: Same fix here - no empty placeholder
         const fullComment = `${selectedAI.name}: ${reaction}`;
         setCurrentComment(fullComment);
         setIsTyping(true);
-        setAiComments((prev) => [...prev, ""]);
+        setAiComments((prev) => [...prev, fullComment]);
         soundManager.play("ai-talk");
       } catch (error) {
         console.error("AI reaction error:", error);
@@ -246,24 +258,44 @@ export default function ChessBoard() {
     }
   }
 
-  // Update game status
   function updateGameStatus() {
+    // CHECKMATE - Game is over, someone won
     if (game.isCheckmate()) {
-      const winner = game.turn() === "w" ? "Black" : "White";
-      setGameStatus(`Checkmate! ${winner} wins!`);
+      // IMPORTANT: game.turn() returns the player who is IN checkmate (the loser)
+      // So if it's white's turn, white is checkmated = black wins
+      const loser = game.turn();
+      const winner = loser === "w" ? "black" : "white";
+
+      setGameStatus(
+        `Checkmate! ${winner === "white" ? "White" : "Black"} wins!`
+      );
+
+      // Show the game over modal with correct winner
+      setGameOver({ isOver: true, winner });
+
+      // Play victory/defeat sound
+      soundManager.play("check");
+
       if (playingAgainstAI) {
-        const isAIWin = winner === "Black";
+        const isAIWin = winner === "black";
         const finalComment = isAIWin
           ? `${selectedAI.name}: Good game! Better luck next time!`
           : `${selectedAI.name}: Well played! You got me!`;
         setAiComments((prev) => [...prev, finalComment]);
       }
-    } else if (game.isDraw()) {
+    }
+    // DRAW - Game is over, no winner
+    else if (game.isDraw()) {
       setGameStatus("Draw!");
-    } else if (game.isCheck()) {
+      setGameOver({ isOver: true, winner: "draw" });
+    }
+    // CHECK - Game continues, just a warning
+    else if (game.isCheck()) {
       setGameStatus("Check!");
-      soundManager.play("check"); // NEW: Check sound
-    } else {
+      soundManager.play("check");
+    }
+    // Normal move - clear status
+    else {
       setGameStatus("");
     }
   }
@@ -274,7 +306,8 @@ export default function ChessBoard() {
     setGameStatus("");
     setSelectedSquare(null);
     setPossibleMoves([]);
-    setLastMove({}); // NEW: Clear highlight
+    setLastMove({});
+    setGameOver(null); // NEW: Clear game over state
     if (!playingAgainstAI) {
       setAiComments([]);
     }
@@ -307,7 +340,7 @@ export default function ChessBoard() {
   });
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8">
+    <div className="flex flex-col items-center justify-start min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-8 overflow-auto">
       {/* Header with Settings */}
       <div className="flex items-center justify-between w-full max-w-[1400px] mb-8">
         <h1 className="text-4xl font-bold text-white">
@@ -325,7 +358,7 @@ export default function ChessBoard() {
 
       {/* AI Setup Panel */}
       {!playingAgainstAI && (
-        <div className="bg-slate-700 rounded-lg p-6 mb-4 w-[600px]">
+        <div className="bg-slate-700 rounded-lg p-6 mb-4 w-full max-w-[600px]">
           <h2 className="text-2xl font-bold text-white mb-4">
             🤖 Play Against AI
           </h2>
@@ -369,22 +402,80 @@ export default function ChessBoard() {
               Choose Your Opponent:
             </label>
             <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
-              {AI_OPPONENTS.map((ai) => (
-                <button
-                  key={ai.name}
-                  onClick={() => setSelectedAI(ai)}
-                  className={`p-4 rounded-lg transition-all text-left ${
-                    selectedAI.name === ai.name
-                      ? "bg-blue-600 border-2 border-blue-400"
-                      : "bg-slate-800 border-2 border-slate-600 hover:border-slate-500"
-                  }`}
-                >
-                  <div className="text-white font-bold text-lg">{ai.name}</div>
-                  <div className="text-gray-300 text-sm mt-1">
-                    {ai.description}
-                  </div>
-                </button>
-              ))}
+              {AI_OPPONENTS
+                // Sort by difficulty: easiest first (stable sort using index)
+                .map((ai, idx) => ({ ai, idx })) // Preserve original index
+                .sort((a, b) => {
+                  const difficultyOrder: { [key: string]: number } = {
+                    "Newbie Nina": 0,
+                    "Friendly Fred": 3,
+                    "Chatty Charlie": 4,
+                    "Zen Master Zara": 6,
+                    "Cocky Carl": 7,
+                    "Dramatic Diana": 8,
+                    "Professor Pat": 9,
+                    "Mysterious Magnus": 10,
+                  };
+                  const diff =
+                    difficultyOrder[a.ai.name] - difficultyOrder[b.ai.name];
+                  // If same difficulty, use original index for stable sort
+                  return diff !== 0 ? diff : a.idx - b.idx;
+                })
+                .map(({ ai }) => {
+                  // Determine difficulty label and color
+                  const getDifficulty = (name: string) => {
+                    switch (name) {
+                      case "Newbie Nina":
+                        return { label: "Beginner", color: "text-green-400" };
+                      case "Friendly Fred":
+                        return { label: "Easy", color: "text-green-300" };
+                      case "Chatty Charlie":
+                        return { label: "Easy", color: "text-green-300" };
+                      case "Zen Master Zara":
+                        return { label: "Medium", color: "text-yellow-400" };
+                      case "Cocky Carl":
+                        return { label: "Medium", color: "text-yellow-400" };
+                      case "Dramatic Diana":
+                        return { label: "Hard", color: "text-orange-400" };
+                      case "Professor Pat":
+                        return { label: "Hard", color: "text-orange-400" };
+                      case "Mysterious Magnus":
+                        return { label: "Expert", color: "text-red-400" };
+                      default:
+                        return { label: "Medium", color: "text-yellow-400" };
+                    }
+                  };
+
+                  const difficulty = getDifficulty(ai.name);
+
+                  return (
+                    <button
+                      key={ai.name}
+                      onClick={() => setSelectedAI(ai)}
+                      className={`p-4 rounded-lg transition-all text-left ${
+                        selectedAI.name === ai.name
+                          ? "bg-blue-600 border-2 border-blue-400"
+                          : "bg-slate-800 border-2 border-slate-600 hover:border-slate-500"
+                      }`}
+                    >
+                      {/* AI Name and Difficulty Badge */}
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-white font-bold text-lg">
+                          {ai.name}
+                        </div>
+                        <span
+                          className={`text-xs font-bold px-2 py-1 rounded ${difficulty.color} bg-slate-900`}
+                        >
+                          {difficulty.label}
+                        </span>
+                      </div>
+                      {/* Description */}
+                      <div className="text-gray-300 text-sm mt-1">
+                        {ai.description}
+                      </div>
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
@@ -403,7 +494,7 @@ export default function ChessBoard() {
       )}
 
       {/* Game Status */}
-      <div className="bg-slate-700 rounded-lg p-4 mb-4 w-[600px]">
+      <div className="bg-slate-700 rounded-lg p-4 mb-4 w-full max-w-[600px]">
         <div className="flex justify-between items-center text-white">
           <span className="text-lg">
             Turn:{" "}
@@ -436,7 +527,7 @@ export default function ChessBoard() {
       <div className="flex gap-4 w-full max-w-[1400px]">
         {/* Chess Board */}
         <div className="flex-shrink-0">
-          <div className="w-[600px] h-[600px] shadow-2xl rounded-lg overflow-hidden">
+          <div className="w-full max-w-[600px] aspect-square shadow-2xl rounded-lg overflow-hidden">
             <Chessboard
               id="BasicBoard"
               position={game.fen()}
@@ -515,6 +606,14 @@ export default function ChessBoard() {
           </div>
         )}
       </div>
+      {/* Game Over Modal */}
+      {gameOver?.isOver && (
+        <GameOverModal
+          winner={gameOver.winner}
+          onNewGame={resetGame}
+          aiName={playingAgainstAI ? selectedAI.name : undefined}
+        />
+      )}
     </div>
   );
 }

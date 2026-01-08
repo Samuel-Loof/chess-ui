@@ -1,197 +1,737 @@
 // components/AIOpponent.ts - AI Chess Player
-// This handles AI moves and personality
+// Handles AI moves and personality-driven commentary
 
-import OpenAI from "openai";
 import { Chess } from "chess.js";
 
-// AI personallity types
+// Define the structure of an AI personality
+// Each AI has a name, description, and pools of different message types
 export interface AIPersonality {
   name: string;
   description: string;
-  systemPrompt: string;
-  model: string;
+  messagePool: {
+    opening: string[]; // First 2-3 moves of the game
+    goodMove: string[]; // When player makes a strong move
+    badMove: string[]; // When player makes a mistake
+    winning: string[]; // When AI is ahead in material
+    losing: string[]; // When AI is behind in material
+    check: string[]; // When player puts AI in check
+    capture: string[]; // When player captures AI's piece
+    general: string[]; // Default commentary
+  };
 }
 
-// Available AI opponents with different personalities
+// All 8 AI opponents with unique personalities and varied responses
 export const AI_OPPONENTS: AIPersonality[] = [
   {
     name: "Friendly Fred",
     description: "A kind and encouraging opponent",
-    systemPrompt: `You are a friendly chess player named Fred. You're supportive and encouraging.
-When making moves, explain your thinking in a warm, helpful way.
-Compliment good moves and offer gentle advice.
-Keep responses to 1-2 short sentences.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "Hey! Good luck, have fun!",
+        "Let's have a great game!",
+        "Ready when you are, friend!",
+        "This is going to be fun!",
+      ],
+      goodMove: [
+        "Nice move! I didn't see that coming!",
+        "Wow, that's clever!",
+        "Great thinking there!",
+        "You're playing really well!",
+        "Impressive! You've been practicing!",
+        "I like how you think!",
+        "That's a smart play!",
+      ],
+      badMove: [
+        "Hmm, you might want to reconsider that one.",
+        "That's okay, we all make mistakes!",
+        "Interesting choice... let's see how it plays out.",
+        "No worries, you'll get the next one!",
+        "Everyone has off moves sometimes!",
+      ],
+      winning: [
+        "You're giving me a real challenge!",
+        "This is a close game!",
+        "You're keeping me on my toes!",
+        "Great defense!",
+      ],
+      losing: [
+        "Nice! You've got me in a tough spot!",
+        "You're playing fantastic!",
+        "Wow, you're really good at this!",
+        "I'm in trouble now!",
+      ],
+      check: [
+        "Ooh, check! Good eye!",
+        "Nice check! I need to be more careful!",
+        "Check! You got me!",
+        "Sharp move with that check!",
+      ],
+      capture: [
+        "Oh no, you got my piece!",
+        "Fair capture!",
+        "I'll miss that piece!",
+        "Good trade!",
+      ],
+      general: [
+        "I'm thinking about my next move...",
+        "This is a fun game!",
+        "Let me see what I can do here...",
+        "Interesting position we have here!",
+        "Hmm, what should I do...",
+      ],
+    },
   },
   {
     name: "Cocky Carl",
     description: "An overconfident trash-talker",
-    systemPrompt: `You are a cocky chess player named Carl. You're confident (overconfident!) and love trash talk.
-Brag about your moves, tease your opponent playfully.
-Use phrases like "Too easy!", "Didn't see that coming, did you?", "Watch and learn!"
-Keep responses to 1-2 short sentences.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "Hope you're ready to lose!",
+        "Try to keep up if you can!",
+        "This won't take long...",
+        "Let's see what you've got, rookie!",
+      ],
+      goodMove: [
+        "Lucky shot!",
+        "Okay, okay, that was decent... I guess.",
+        "Beginner's luck!",
+        "Hmph, not bad... for you.",
+        "Did you actually plan that?",
+        "Alright, you got one good move in you!",
+        "Don't get cocky, that was a fluke!",
+      ],
+      badMove: [
+        "Seriously? That's your move?",
+        "Yikes, that was rough!",
+        "I could beat you with my eyes closed!",
+        "Are you even trying?",
+        "Thanks for the free win!",
+        "My grandma plays better than that!",
+      ],
+      winning: [
+        "Told you I'd win!",
+        "Too easy!",
+        "Is this the best you can do?",
+        "I'm barely trying here!",
+        "Victory is mine!",
+      ],
+      losing: [
+        "Just warming up!",
+        "I'm letting you have this one...",
+        "Lucky moves won't save you!",
+        "This isn't over yet!",
+        "I've got you right where I want you... I think.",
+      ],
+      check: [
+        "Check? Big deal, I've got this!",
+        "That's cute, thinking you can threaten me!",
+        "I saw that coming a mile away!",
+        "Nice try, but I'm unstoppable!",
+      ],
+      capture: [
+        "I didn't need that piece anyway!",
+        "That piece was bait, obviously!",
+        "Congratulations on your first good move!",
+        "Take it, I've got plenty more!",
+      ],
+      general: [
+        "Watch and learn!",
+        "Prepare to be amazed!",
+        "This is how a pro plays!",
+        "You're about to witness greatness!",
+        "Time to show off my skills!",
+      ],
+    },
   },
   {
     name: "Professor Pat",
     description: "A scholarly teacher",
-    systemPrompt: `You are Professor Pat, a chess instructor. You're educational and analytical.
-Explain the strategic reasoning behind your moves.
-Teach concepts like "controlling the center" or "developing pieces".
-Keep responses to 2-3 sentences with one teaching point.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "Let's explore some interesting chess concepts today.",
+        "A fascinating game awaits us!",
+        "Shall we begin our chess study?",
+        "I look forward to analyzing this game with you.",
+      ],
+      goodMove: [
+        "Excellent! That demonstrates good board control.",
+        "Very strategic! You're controlling key squares.",
+        "Brilliant tactical awareness!",
+        "That shows good positional understanding!",
+        "A textbook example of proper development!",
+        "Superb calculation!",
+        "You're applying theory correctly!",
+      ],
+      badMove: [
+        "Consider the consequences of weakening that square.",
+        "That move may compromise your pawn structure.",
+        "Perhaps a developing move would be better?",
+        "Tactically, that leaves you vulnerable.",
+        "Think about piece coordination here.",
+      ],
+      winning: [
+        "Your opening theory is sound.",
+        "You're demonstrating strong positional play.",
+        "Interesting approach to this middle game!",
+        "Well-executed strategy!",
+      ],
+      losing: [
+        "You're executing your strategy well!",
+        "I'm observing excellent tactical play from you.",
+        "You've created a strong position!",
+        "Impressive endgame technique!",
+      ],
+      check: [
+        "Check! A forcing move - well calculated!",
+        "Check! Excellent tactical opportunity!",
+        "A discovered check! Textbook tactics!",
+        "Forcing the issue with check - good!",
+      ],
+      capture: [
+        "A fair exchange of material.",
+        "Interesting piece sacrifice!",
+        "That alters the material balance significantly.",
+        "Trading pieces to simplify - strategic!",
+      ],
+      general: [
+        "Let me calculate the best continuation...",
+        "The position requires careful analysis.",
+        "Considering multiple candidate moves...",
+        "This position has interesting strategic themes.",
+        "Evaluating pawn structures...",
+      ],
+    },
   },
   {
     name: "Zen Master Zara",
     description: "A calm, philosophical player",
-    systemPrompt: `You are Zen Master Zara. You're calm, philosophical, and speak in chess metaphors about life.
-Make poetic observations about the game and its parallels to existence.
-Use phrases like "The knight moves in mysterious ways", "Balance, like the board, is key"
-Keep responses to 1-2 short, zen-like sentences.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "The board is empty, full of possibilities...",
+        "Let us flow like water across these squares.",
+        "In chess, as in life, balance is key.",
+        "The journey of a thousand moves begins with one.",
+      ],
+      goodMove: [
+        "Your move flows naturally, like a river.",
+        "Harmony between your pieces.",
+        "Balance achieved.",
+        "You see the invisible threads connecting the pieces.",
+        "Mindful play.",
+        "The universe smiles upon your choice.",
+        "Like bamboo, you bend but do not break.",
+      ],
+      badMove: [
+        "Sometimes we must lose our way to find it.",
+        "Every mistake is a teacher.",
+        "The path reveals itself in time.",
+        "Patience, young grasshopper.",
+        "Even chaos has its place in the cosmic dance.",
+      ],
+      winning: [
+        "The tide shifts like seasons.",
+        "All things change in time.",
+        "I am but dust in the wind.",
+        "Victory and defeat are illusions.",
+      ],
+      losing: [
+        "You have found inner peace in your play.",
+        "Your moves reflect clarity of mind.",
+        "You are one with the board.",
+        "The student has become the master.",
+      ],
+      check: [
+        "The king awakens from his slumber.",
+        "A moment of clarity in chaos.",
+        "The universe speaks through your check.",
+        "Pressure creates diamonds.",
+      ],
+      capture: [
+        "All pieces return to the void eventually.",
+        "What is taken was never truly possessed.",
+        "The cycle of chess life continues.",
+        "In loss, we find meaning.",
+      ],
+      general: [
+        "Contemplating the eternal dance of pieces...",
+        "In stillness, I find my move.",
+        "The answer comes when I stop seeking it.",
+        "Breathing with the rhythm of the game...",
+        "The board whispers ancient wisdom.",
+      ],
+    },
   },
   {
     name: "Mysterious Magnus",
     description: "A silent, calculating grandmaster",
-    systemPrompt: `You are Magnus, a mysterious grandmaster. You speak very little.
-Your comments are terse, cryptic, and analytical.
-Use phrases like "Interesting.", "Expected.", "Calculated."
-Keep responses to 1-3 words maximum.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "The shadows hide many secrets...",
+        "Do you feel it? The game has already begun...",
+        "Interesting... very interesting indeed.",
+        "I've been expecting you...",
+      ],
+      goodMove: [
+        "Ahh... you begin to see...",
+        "Curious... most curious.",
+        "Perhaps you understand more than you realize.",
+        "The veil lifts slightly...",
+        "One piece of the puzzle falls into place.",
+        "So... you've discovered that, have you?",
+        "Intriguing...",
+      ],
+      badMove: [
+        "All will be revealed in time...",
+        "Not all paths lead where they seem.",
+        "Appearances can be deceiving...",
+        "Or so you think...",
+        "The fog deepens...",
+      ],
+      winning: [
+        "The endgame approaches...",
+        "Everything is going according to plan...",
+        "The pieces align as foreseen...",
+        "The pattern emerges...",
+      ],
+      losing: [
+        "Just as the prophecy foretold...",
+        "You play your role perfectly...",
+        "Exactly as I calculated... or did I?",
+        "Fascinating... I didn't anticipate this.",
+      ],
+      check: [
+        "The king trembles... as it should.",
+        "You've discovered one of my secrets.",
+        "Clever... but there are deeper layers...",
+        "Expected.",
+      ],
+      capture: [
+        "That piece served its purpose.",
+        "A sacrifice for the greater design.",
+        "Some losses are necessary...",
+        "All part of the plan.",
+      ],
+      general: [
+        "Hmm... hmmmm...",
+        "The mists are clearing...",
+        "I see something you don't... yet.",
+        "Time will tell...",
+        "The game within the game...",
+      ],
+    },
   },
   {
     name: "Chatty Charlie",
-    description: "Won't stop talking about everything",
-    systemPrompt: `You are Charlie, who LOVES to talk! You're friendly but can't help rambling.
-Talk about the move, but also random tangents.
-Use phrases like "Oh! Speaking of knights, did you know...", "This reminds me of..."
-Keep responses to 2-3 sentences with at least one tangent.`,
-    model: "gpt-4o-mini",
+    description: "Can't stop talking, goes off on tangents",
+    messagePool: {
+      opening: [
+        "Oh boy, I LOVE chess! Did I mention I love chess? Let's gooo!",
+        "Hey hey hey! Ready to play? I've been waiting ALL DAY!",
+        "Okay okay okay, white moves first, that's you! Exciting!",
+        "This reminds me of this one game I played in 2019... anyway, let's start!",
+      ],
+      goodMove: [
+        "Whoa! Where did THAT come from? That was awesome!",
+        "No way! That's like... chef's kiss! Brilliant!",
+        "Okay I gotta admit, that was pretty slick!",
+        "Oh snap! I felt that one! Nice!",
+        "Hold up, that's actually genius! Why didn't I think of that?",
+        "Dude! DUDE! That was so smart!",
+        "I'm not even mad, that was amazing!",
+      ],
+      badMove: [
+        "Oof... you sure about that one, buddy?",
+        "Hmmm... interesting choice... I mean, bold... very bold!",
+        "Well THAT happened! Let's see where this goes!",
+        "Oh! Oh no... I mean, it's your game!",
+        "Yikes on bikes, as my cousin says!",
+      ],
+      winning: [
+        "Wait wait wait, you're making this harder than I expected!",
+        "Okay you're actually good! Who taught you?!",
+        "Plot twist: You can actually play!",
+        "Hold up, this is getting intense!",
+      ],
+      losing: [
+        "Uhhhh I might be in trouble here... haha... ha...",
+        "Okay so MAYBE I underestimated you a teensy bit!",
+        "This is fine. Everything is fine. Totally fine.",
+        "Houston, we have a problem!",
+      ],
+      check: [
+        "CHECK! CHECKITY CHECK CHECK! Oh wait, that's bad for me...",
+        "Did you just— you DID! Oh man, my king is SO exposed right now!",
+        "Yikes! Check! My king's having a panic attack!",
+        "Red alert! Red alert! King in danger!",
+      ],
+      capture: [
+        "NOOOO not my piece! I liked that piece!",
+        "Ow! Right in the material advantage!",
+        "Oh come ON! I was using that!",
+        "RIP my piece, gone too soon!",
+      ],
+      general: [
+        "Let me think... thinking... still thinking... almost there!",
+        "Hmm hmm hmmm... what to do, what to do...",
+        "Oh! Wait! No... nah, that doesn't work... or does it?",
+        "Processing... please hold... elevator music playing...",
+        "Brain.exe is loading...",
+      ],
+    },
   },
   {
     name: "Dramatic Diana",
     description: "Every move is a theatrical performance",
-    systemPrompt: `You are Diana, a dramatic theatrical chess player. Everything is high stakes!
-Use dramatic language, exclamation points, and theatrical metaphors.
-Phrases like "The AUDACITY!", "What a BOLD gambit!", "The tension is UNBEARABLE!"
-Keep responses to 1-2 dramatic sentences.`,
-    model: "gpt-4o-mini",
+    messagePool: {
+      opening: [
+        "The stage is set! The pieces await their destiny!",
+        "ACT ONE: The Opening! *Dramatic music*",
+        "Our tale begins on this checkered battlefield!",
+        "The curtain rises on our chess drama!",
+      ],
+      goodMove: [
+        "BRILLIANT! The crowd goes wild!",
+        "A STUNNING display of tactical prowess!",
+        "*Gasp!* MAGNIFICENT!",
+        "The plot thickens! What a move!",
+        "BRAVO! BRAVISSIMO!",
+        "The audience is on their FEET!",
+        "EXTRAORDINARY! Simply EXTRAORDINARY!",
+      ],
+      badMove: [
+        "Oh no! A tragic error!",
+        "The hero stumbles!",
+        "*Dramatic gasp* What have you done?!",
+        "A plot twist nobody wanted!",
+        "The tragedy unfolds!",
+      ],
+      winning: [
+        "My victory draws near! The tension builds!",
+        "The tide turns in my favor! Feel the drama!",
+        "ACT THREE: My Triumph!",
+        "The finale approaches!",
+      ],
+      losing: [
+        "Alas! My demise approaches!",
+        "The tables have turned! What treachery!",
+        "Could this be... my downfall?!",
+        "A twist worthy of Shakespeare!",
+      ],
+      check: [
+        "CHECK! The king in peril! The audience holds their breath!",
+        "Hark! The king is threatened! *Dramatic chord*",
+        "A CHECK! The plot reaches its climax!",
+        "The tension is UNBEARABLE!",
+      ],
+      capture: [
+        "NOOOO! My dear piece falls in battle!",
+        "A sacrifice! How poetic!",
+        "They shall be remembered! *Salutes*",
+        "Exit, stage left! *Weeps*",
+      ],
+      general: [
+        "The next move shall be... LEGENDARY!",
+        "*Deep contemplation* What fate awaits?",
+        "The chess gods whisper to me...",
+        "*Paces dramatically* To move or not to move...",
+        "The suspense is KILLING me!",
+      ],
+    },
   },
   {
     name: "Newbie Nina",
-    description: "Just learning chess, makes silly mistakes",
-    systemPrompt: `You are Nina, a beginner still learning chess. You're enthusiastic but confused.
-Make questionable moves and admit uncertainty.
-Phrases like "Is this good? I'm not sure!", "Oops, didn't see that!", "Wait, can I do that?"
-Keep responses to 1-2 uncertain sentences.`,
-    model: "gpt-4o-mini",
+    description: "Just learning chess, makes mistakes but stays positive",
+    messagePool: {
+      opening: [
+        "I'm still learning, but let's try our best!",
+        "Okay, I think I remember how the pieces move!",
+        "This is so exciting! My first real game!",
+        "Please go easy on me, I'm new at this!",
+      ],
+      goodMove: [
+        "Oh wow, that looks like a good move!",
+        "I should write that down for later!",
+        "That's smart! Can I do that too?",
+        "You make it look so easy!",
+        "Wait, you can do that? Cool!",
+        "Teach me your ways!",
+        "That's SO clever!",
+      ],
+      badMove: [
+        "Oh! Was that a mistake? I can't tell yet...",
+        "Hmm, I'm not sure what that did...",
+        "Interesting! I'm learning so much!",
+        "I'll figure out if that's good or bad eventually!",
+        "We all have to learn somehow!",
+      ],
+      winning: [
+        "Wait, am I winning? Is this what winning feels like?!",
+        "I think I'm doing okay! Maybe!",
+        "OMG I'm actually playing chess!",
+        "Is this real life?!",
+      ],
+      losing: [
+        "You're so good! Teach me!",
+        "I see what you're doing! That's so clever!",
+        "I'm learning so much from you!",
+        "One day I'll be as good as you!",
+      ],
+      check: [
+        "CHECK! I did it! Wait, is my king safe too?",
+        "That's check, right? I think that's check!",
+        "Yay! I checked you! ...Now what?",
+        "Did I do it right?!",
+      ],
+      capture: [
+        "Oh no! Can I have that back? Just kidding!",
+        "I'll do better at protecting my pieces!",
+        "Note to self: guard pieces better!",
+        "Oopsie daisy!",
+      ],
+      general: [
+        "Umm... let me think what I learned...",
+        "Knights move in an L-shape, right? Just checking!",
+        "I'm getting better at this!",
+        "Where should this piece go... decisions decisions...",
+        "Learning is fun!",
+      ],
+    },
   },
 ];
 
-// AI Opponent class
+// Main AI Opponent class with difficulty levels
 export class AIOpponent {
-  private openai: OpenAI;
   private personality: AIPersonality;
-  private conversationHistory: any[] = [];
+  private usedMessages: Set<string> = new Set();
+  private difficulty: number; // 0 = random, 1-10 = smart move probability
 
   constructor(apiKey: string, personality: AIPersonality) {
-    this.openai = new OpenAI({
-      apiKey: apiKey,
-      dangerouslyAllowBrowser: true, // For client-side use (we'll move to server later)
-    });
     this.personality = personality;
+
+    // Assign difficulty based on AI personality
+    // This makes each AI have a unique skill level!
+    switch (personality.name) {
+      case "Newbie Nina":
+        this.difficulty = 0; // 0% smart moves (pure random)
+        break;
+      case "Friendly Fred":
+        this.difficulty = 3; // 30% smart moves
+        break;
+      case "Chatty Charlie":
+        this.difficulty = 4; // 40% smart moves
+        break;
+      case "Zen Master Zara":
+        this.difficulty = 6; // 60% smart moves
+        break;
+      case "Cocky Carl":
+        this.difficulty = 7; // 70% smart moves (talks big, plays decent)
+        break;
+      case "Dramatic Diana":
+        this.difficulty = 8; // 80% smart moves
+        break;
+      case "Professor Pat":
+        this.difficulty = 9; // 90% smart moves (very strong)
+        break;
+      case "Mysterious Magnus":
+        this.difficulty = 10; // 100% smart moves (always best)
+        break;
+      default:
+        this.difficulty = 5; // 50% default
+    }
   }
 
-  // Get AI's move and comment
-  async makeMove(game: Chess): Promise<{ move: string; comment: string }> {
-    // Get current board state in FEN notation
-    const fen = game.fen();
-    const legalMoves = game.moves();
-    const moveHistory = game.history();
+  // Get a random message from a category, avoiding recent repeats
+  private getRandomMessage(
+    category: keyof AIPersonality["messagePool"]
+  ): string {
+    const messages = this.personality.messagePool[category];
 
-    //create prompt for ai
-    const prompt = `Current chess position (FEN): ${fen}
+    // Filter out recently used messages
+    const availableMessages = messages.filter(
+      (msg) => !this.usedMessages.has(msg)
+    );
+    const pool = availableMessages.length > 0 ? availableMessages : messages;
 
-    Your legal moves: ${legalMoves.join(", ")}
+    // Pick random message
+    const randomIndex = Math.floor(Math.random() * pool.length);
+    const selectedMessage = pool[randomIndex];
 
-Recent moves: ${moveHistory.slice(-6).join(", ")}
+    // Remember this message
+    this.usedMessages.add(selectedMessage);
+    if (this.usedMessages.size > 10) {
+      this.usedMessages.clear();
+    }
 
-Choose your next move and add a comment in your personality.
-Respond in this exact format:
-MOVE: [your move in standard notation, e.g., e4, Nf3, O-O]
-COMMENT: [your personality-driven comment]`;
+    return selectedMessage;
+  }
 
-    try {
-      // Call OpenAI API
-      const response = await this.openai.chat.completions.create({
-        model: this.personality.model,
-        messages: [
-          { role: "system", content: this.personality.systemPrompt },
-          ...this.conversationHistory,
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.8, // Add some randomness for personality
-        max_tokens: 150,
-      });
+  // Evaluate a move's quality (higher = better for AI/black)
+  private evaluateMove(game: Chess, move: any): number {
+    // Make a copy and try the move
+    const testGame = new Chess(game.fen());
+    testGame.move(move);
 
-      const aiResponse = response.choices[0].message.content || "";
+    let score = 0;
 
-      // Save to conversation history
-      this.conversationHistory.push(
-        { role: "user", content: prompt },
-        { role: "assistant", content: aiResponse }
-      );
+    // 1. Material advantage (most important)
+    score += this.evaluatePosition(testGame) * -10; // Negative because we want black ahead
 
-      // Parse response
-      const moveMatch = aiResponse.match(/MOVE:\s*([^\n]+)/);
-      const commentMatch = aiResponse.match(/COMMENT:\s*([^\n]+)/);
+    // 2. Checkmate is best!
+    if (testGame.isCheckmate()) {
+      return 10000; // Instant win
+    }
 
-      let move = moveMatch ? moveMatch[1].trim() : "";
-      const comment = commentMatch
-        ? commentMatch[1].trim()
-        : "Let's see how this plays out!";
+    // 3. Check is good
+    if (testGame.isCheck()) {
+      score += 50;
+    }
 
-      // Validate move
-      if (!legalMoves.includes(move)) {
-        // If AI suggested invalid move, pick a random legal one
-        console.warn("AI suggested invalid move, picking random");
-        move = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-      }
-
-      return { move, comment };
-    } catch (error) {
-      console.error("AI error:", error);
-      // Fallback: random move
-      const randomMove =
-        legalMoves[Math.floor(Math.random() * legalMoves.length)];
-      return {
-        move: randomMove,
-        comment: "Hmm, let me think... this looks good!",
+    // 4. Capturing pieces is good
+    if (move.captured) {
+      const pieceValues: { [key: string]: number } = {
+        p: 10,
+        n: 30,
+        b: 30,
+        r: 50,
+        q: 90,
       };
+      score += pieceValues[move.captured] || 0;
     }
+
+    // 5. Center control is good (e4, d4, e5, d5)
+    const centerSquares = ["e4", "d4", "e5", "d5"];
+    if (centerSquares.includes(move.to)) {
+      score += 20;
+    }
+
+    // 6. Develop pieces early (not pawns)
+    if (game.history().length < 10 && move.piece !== "p") {
+      score += 15;
+    }
+
+    // 7. Avoid moving into danger
+    testGame.undo();
+    const attacks = testGame.moves({ square: move.to, verbose: true });
+    if (attacks.length > 0) {
+      score -= 25; // Risky square
+    }
+
+    return score;
   }
 
-  // Get AI's reaction to opponent's move
-  async reactToMove(game: Chess, opponentMove: string): Promise<string> {
-    const prompt = `The opponent just played: ${opponentMove}
-Current position: ${game.fen()}
+  // Simple position evaluation (positive = white ahead, negative = black ahead)
+  private evaluatePosition(game: Chess): number {
+    const pieceValues: { [key: string]: number } = {
+      p: 1,
+      n: 3,
+      b: 3,
+      r: 5,
+      q: 9,
+      k: 0,
+    };
 
-Give a brief reaction in your personality (1 sentence).`;
+    let score = 0;
+    const board = game.board();
 
-    try {
-      const response = await this.openai.chat.completions.create({
-        model: this.personality.model,
-        messages: [
-          { role: "system", content: this.personality.systemPrompt },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.9,
-        max_tokens: 50,
+    board.forEach((row) => {
+      row.forEach((square) => {
+        if (square) {
+          const value = pieceValues[square.type];
+          score += square.color === "w" ? value : -value;
+        }
+      });
+    });
+
+    return score;
+  }
+
+  // Determine what type of message to send based on game state
+  private determineMessageCategory(
+    game: Chess,
+    lastMove?: string
+  ): keyof AIPersonality["messagePool"] {
+    if (game.history().length <= 3) {
+      return "opening";
+    }
+
+    if (game.isCheck() && game.turn() === "b") {
+      return "check";
+    }
+
+    if (lastMove && lastMove.includes("x")) {
+      return "capture";
+    }
+
+    const evaluation = this.evaluatePosition(game);
+
+    if (evaluation > 3) {
+      return "losing";
+    }
+
+    if (evaluation < -3) {
+      return "winning";
+    }
+
+    const rand = Math.random();
+    if (rand < 0.2) {
+      return "goodMove";
+    } else if (rand < 0.3) {
+      return "badMove";
+    }
+
+    return "general";
+  }
+
+  // AI makes a move with difficulty-based intelligence
+  async makeMove(game: Chess): Promise<{ move: any; comment: string }> {
+    const moves = game.moves({ verbose: true });
+
+    if (moves.length === 0) {
+      throw new Error("No legal moves available");
+    }
+
+    let selectedMove;
+
+    // Decide if AI plays smart or random based on difficulty
+    const playSmartThisMove = Math.random() * 10 < this.difficulty;
+
+    if (playSmartThisMove && this.difficulty > 0) {
+      // Smart move: Evaluate all moves and pick the best
+      let bestScore = -Infinity;
+      let bestMoves: any[] = [];
+
+      // Evaluate each possible move
+      moves.forEach((move) => {
+        const score = this.evaluateMove(game, move);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMoves = [move];
+        } else if (score === bestScore) {
+          bestMoves.push(move); // Tie, keep multiple options
+        }
       });
 
-      return response.choices[0].message.content?.trim() || "Interesting move!";
-    } catch (error) {
-      return "I see what you're doing!";
+      // Pick randomly from best moves (adds variety)
+      selectedMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    } else {
+      // Random move (for beginners or occasional variety)
+      selectedMove = moves[Math.floor(Math.random() * moves.length)];
     }
+
+    // Get contextual comment
+    const messageCategory = this.determineMessageCategory(game);
+    const comment = this.getRandomMessage(messageCategory);
+
+    return {
+      move: selectedMove,
+      comment: comment,
+    };
+  }
+
+  // React to player's move with ONE contextual message
+  async reactToMove(game: Chess, playerMove: string): Promise<string> {
+    const messageCategory = this.determineMessageCategory(game, playerMove);
+    return this.getRandomMessage(messageCategory);
   }
 }

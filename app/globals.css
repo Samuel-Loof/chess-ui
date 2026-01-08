@@ -25,6 +25,11 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+/* Fade in animation - used for chat messages and overlays */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -36,6 +41,68 @@ body {
   }
 }
 
+/* Bounce in animation - used for game over modal entrance */
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Scale in animation - used for title text */
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Slide up animation - used for subtitle and button */
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ========================================
+   ANIMATION UTILITY CLASSES
+   ======================================== */
+
+/* Apply fade in (0.3s) */
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* Apply bounce in (0.6s) - creates a playful entrance effect */
+.animate-bounceIn {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Apply scale in (0.5s, delayed 0.2s) - waits for modal to appear first */
+.animate-scaleIn {
+  animation: scaleIn 0.5s ease-out 0.2s both;
+}
+
+/* Apply slide up (0.5s, delayed 0.4s) - creates staggered appearance */
+.animate-slideUp {
+  animation: slideUp 0.5s ease-out 0.4s both;
 }
