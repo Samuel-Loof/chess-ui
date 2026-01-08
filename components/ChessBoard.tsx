@@ -12,6 +12,7 @@ import GameOverModal from "./GameOverModal";
 export default function ChessBoard() {
   // Game state
   const [game, setGame] = useState(new Chess());
+  const [gameMode, setGameMode] = useState<"menu" | "ai" | "local">("menu");
   const [currentTurn, setCurrentTurn] = useState<"w" | "b">("w");
   const [gameStatus, setGameStatus] = useState<string>("");
   const [gameOver, setGameOver] = useState<{
@@ -27,12 +28,10 @@ export default function ChessBoard() {
   const [playingAgainstAI, setPlayingAgainstAI] = useState(false);
   const [aiOpponent, setAiOpponent] = useState<AIOpponent | null>(null);
   const [selectedAI, setSelectedAI] = useState<AIPersonality>(AI_OPPONENTS[0]);
-  const [aiApiKey, setAiApiKey] = useState("");
   const [aiThinking, setAiThinking] = useState(false);
   const [aiComments, setAiComments] = useState<string[]>([]);
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
-  // NEW: Settings state
+  // Settings state
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.5);
   const [chatVisible, setChatVisible] = useState(true);
@@ -96,18 +95,23 @@ export default function ChessBoard() {
     }
   }, [currentComment, isTyping]);
 
-  // Initialize AI opponent
-  function startAIGame() {
-    if (!aiApiKey) {
-      alert("Please enter your OpenAI API key first!");
-      return;
-    }
+  function startLocalGame() {
+    setGameMode("local");
+    resetGame();
+  }
 
-    const ai = new AIOpponent(aiApiKey, selectedAI);
+  function startAIGame() {
+    const ai = new AIOpponent("", selectedAI);
     setAiOpponent(ai);
     setPlayingAgainstAI(true);
+    setGameMode("ai");
     setAiComments([`${selectedAI.name}: Let's play! You're White, I'm Black.`]);
     resetGame();
+  }
+
+  function backToMenu() {
+    stopAIGame();
+    setGameMode("menu");
   }
 
   async function makeAIMove() {
@@ -356,55 +360,56 @@ export default function ChessBoard() {
         />
       </div>
 
-      {/* AI Setup Panel */}
-      {!playingAgainstAI && (
-        <div className="bg-slate-700 rounded-lg p-6 mb-4 w-full max-w-[600px]">
-          <h2 className="text-2xl font-bold text-white mb-4">
-            🤖 Play Against AI
+      {/* MAIN MENU - Choose game mode */}
+      {gameMode === "menu" && (
+        <div className="w-full max-w-[800px] space-y-6">
+          <h2 className="text-3xl font-bold text-white text-center mb-8">
+            Choose Game Mode
           </h2>
 
-          {/* API Key Input */}
-          <div className="mb-4">
-            <button
-              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-              className="text-blue-400 hover:text-blue-300 text-sm mb-2"
-            >
-              {showApiKeyInput ? "▼" : "▶"}{" "}
-              {aiApiKey ? "API Key Set ✓" : "Enter OpenAI API Key"}
-            </button>
+          {/* AI Mode Button */}
+          <button
+            onClick={() => setGameMode("ai")}
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-8 px-8 rounded-xl transition-all transform hover:scale-105 shadow-xl"
+          >
+            <div className="text-4xl mb-2">🤖</div>
+            <div className="text-2xl mb-2">Play vs AI</div>
+            <div className="text-sm text-gray-200">
+              Challenge smart opponents with unique personalities
+            </div>
+          </button>
 
-            {showApiKeyInput && (
-              <div>
-                <input
-                  type="password"
-                  placeholder="sk-..."
-                  value={aiApiKey}
-                  onChange={(e) => setAiApiKey(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-800 text-white rounded border border-slate-600 focus:border-blue-500 outline-none"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Get your API key from{" "}
-                  <a
-                    href="https://platform.openai.com/api-keys"
-                    target="_blank"
-                    className="text-blue-400 hover:underline"
-                  >
-                    OpenAI
-                  </a>
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Local Multiplayer Button */}
+          <button
+            onClick={startLocalGame}
+            className="w-full bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-8 px-8 rounded-xl transition-all transform hover:scale-105 shadow-xl"
+          >
+            <div className="text-4xl mb-2">👥</div>
+            <div className="text-2xl mb-2">Local Multiplayer</div>
+            <div className="text-sm text-gray-200">
+              Play against a friend on the same device
+            </div>
+          </button>
+        </div>
+      )}
 
-          {/* AI Personality Selection */}
-          <div className="mb-4">
-            <label className="text-white font-semibold block mb-2">
-              Choose Your Opponent:
-            </label>
-            <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto">
-              {AI_OPPONENTS
-                // Sort by difficulty: easiest first (stable sort using index)
-                .map((ai, idx) => ({ ai, idx })) // Preserve original index
+      {/* AI OPPONENT SELECTION */}
+      {gameMode === "ai" && !playingAgainstAI && (
+        <div className="w-full max-w-[800px]">
+          <button
+            onClick={() => setGameMode("menu")}
+            className="mb-4 text-gray-400 hover:text-white transition-colors"
+          >
+            ← Back to Menu
+          </button>
+
+          <div className="bg-slate-700 rounded-lg p-6">
+            <h2 className="text-2xl font-bold text-white mb-4">
+              🤖 Choose Your Opponent
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto mb-6">
+              {AI_OPPONENTS.map((ai, idx) => ({ ai, idx }))
                 .sort((a, b) => {
                   const difficultyOrder: { [key: string]: number } = {
                     "Newbie Nina": 0,
@@ -418,25 +423,20 @@ export default function ChessBoard() {
                   };
                   const diff =
                     difficultyOrder[a.ai.name] - difficultyOrder[b.ai.name];
-                  // If same difficulty, use original index for stable sort
                   return diff !== 0 ? diff : a.idx - b.idx;
                 })
                 .map(({ ai }) => {
-                  // Determine difficulty label and color
                   const getDifficulty = (name: string) => {
                     switch (name) {
                       case "Newbie Nina":
                         return { label: "Beginner", color: "text-green-400" };
                       case "Friendly Fred":
-                        return { label: "Easy", color: "text-green-300" };
                       case "Chatty Charlie":
                         return { label: "Easy", color: "text-green-300" };
                       case "Zen Master Zara":
-                        return { label: "Medium", color: "text-yellow-400" };
                       case "Cocky Carl":
                         return { label: "Medium", color: "text-yellow-400" };
                       case "Dramatic Diana":
-                        return { label: "Hard", color: "text-orange-400" };
                       case "Professor Pat":
                         return { label: "Hard", color: "text-orange-400" };
                       case "Mysterious Magnus":
@@ -458,7 +458,6 @@ export default function ChessBoard() {
                           : "bg-slate-800 border-2 border-slate-600 hover:border-slate-500"
                       }`}
                     >
-                      {/* AI Name and Difficulty Badge */}
                       <div className="flex items-center justify-between mb-1">
                         <div className="text-white font-bold text-lg">
                           {ai.name}
@@ -469,7 +468,6 @@ export default function ChessBoard() {
                           {difficulty.label}
                         </span>
                       </div>
-                      {/* Description */}
                       <div className="text-gray-300 text-sm mt-1">
                         {ai.description}
                       </div>
@@ -477,135 +475,132 @@ export default function ChessBoard() {
                   );
                 })}
             </div>
-          </div>
 
-          <button
-            onClick={startAIGame}
-            disabled={!aiApiKey}
-            className={`w-full py-3 rounded-lg font-bold transition-colors ${
-              aiApiKey
-                ? "bg-green-600 hover:bg-green-700 text-white"
-                : "bg-gray-600 text-gray-400 cursor-not-allowed"
-            }`}
-          >
-            Start Game vs {selectedAI.name}
-          </button>
+            <button
+              onClick={startAIGame}
+              className="w-full py-4 rounded-lg font-bold text-xl transition-colors bg-green-600 hover:bg-green-700 text-white shadow-lg"
+            >
+              🎮 Start Game vs {selectedAI.name}
+            </button>
+            <p className="text-xs text-gray-400 mt-2 text-center">
+              💡 AI uses smart move evaluation - no API key required!
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Game Status */}
-      <div className="bg-slate-700 rounded-lg p-4 mb-4 w-full max-w-[600px]">
-        <div className="flex justify-between items-center text-white">
-          <span className="text-lg">
-            Turn:{" "}
-            <span className="font-bold">
-              {currentTurn === "w"
-                ? "White (You)"
-                : playingAgainstAI
-                ? `Black (${selectedAI.name})`
-                : "Black"}
-            </span>
-          </span>
-          {gameStatus && (
-            <span className="text-xl font-bold text-yellow-400">
-              {gameStatus}
-            </span>
-          )}
-          {aiThinking && (
-            <span className="text-blue-400 animate-pulse">
-              🤔 AI thinking...
-            </span>
-          )}
-        </div>
-        {playingAgainstAI && (
-          <p className="text-sm text-gray-300 mt-2">
-            Playing against {selectedAI.name}
-          </p>
-        )}
-      </div>
+      {/* GAME SCREEN - Larger board, cleaner layout */}
+      {(gameMode === "ai" && playingAgainstAI) || gameMode === "local" ? (
+        <>
+          {/* Back button */}
+          <button
+            onClick={backToMenu}
+            className="self-start mb-4 text-gray-400 hover:text-white transition-colors"
+          >
+            ← Back to Menu
+          </button>
 
-      <div className="flex gap-4 w-full max-w-[1400px]">
-        {/* Chess Board */}
-        <div className="flex-shrink-0">
-          <div className="w-full max-w-[600px] aspect-square shadow-2xl rounded-lg overflow-hidden">
-            <Chessboard
-              id="BasicBoard"
-              position={game.fen()}
-              onPieceDrop={onDrop}
-              onSquareClick={onSquareClick}
-              customSquareStyles={customSquareStyles}
-              arePiecesDraggable={!aiThinking}
-            />
-          </div>
-
-          {/* Controls */}
-          <div className="mt-4 flex gap-4">
-            {playingAgainstAI ? (
-              <button
-                onClick={stopAIGame}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-              >
-                Stop AI Game
-              </button>
-            ) : (
-              <button
-                onClick={resetGame}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-              >
-                New Game
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                game.undo();
-                if (playingAgainstAI) game.undo();
-                setGame(new Chess(game.fen()));
-                setSelectedSquare(null);
-                setPossibleMoves([]);
-                setLastMove({}); // NEW: Clear highlight on undo
-              }}
-              disabled={aiThinking}
-              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50"
-            >
-              Undo Move
-            </button>
-          </div>
-        </div>
-
-        {/* AI Chat Panel */}
-        {playingAgainstAI && chatVisible && (
-          <div className="flex-1 bg-slate-700 rounded-lg p-4 max-w-[600px]">
-            <h2 className="text-xl font-bold text-white mb-4">
-              💬 AI Commentary
-            </h2>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto">
-              {aiComments.map((comment, i) => (
-                <div
-                  key={i}
-                  className="bg-slate-800 rounded-lg p-3 animate-fadeIn"
-                >
-                  <p className="text-gray-200">{comment}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Move History */}
-        {!playingAgainstAI && (
-          <div className="flex-1 bg-slate-700 rounded-lg p-4 max-w-[600px]">
-            <h2 className="text-xl font-bold text-white mb-2">Move History</h2>
-            <div className="text-gray-300 font-mono text-sm max-h-[500px] overflow-y-auto">
-              {game.history().length === 0 ? (
-                <p className="text-gray-500">No moves yet</p>
-              ) : (
-                <p>{game.history().join(", ")}</p>
+          {/* Game Status */}
+          <div className="bg-slate-700 rounded-lg p-4 mb-4 w-full max-w-[1200px]">
+            <div className="flex justify-between items-center text-white">
+              <span className="text-lg">
+                Turn:{" "}
+                <span className="font-bold">
+                  {currentTurn === "w"
+                    ? "White (You)"
+                    : playingAgainstAI
+                    ? `Black (${selectedAI.name})`
+                    : "Black (Player 2)"}
+                </span>
+              </span>
+              {gameStatus && (
+                <span className="text-xl font-bold text-yellow-400">
+                  {gameStatus}
+                </span>
+              )}
+              {aiThinking && (
+                <span className="text-blue-400 animate-pulse">
+                  🤔 AI thinking...
+                </span>
               )}
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex gap-6 w-full max-w-[1200px]">
+            {/* Chess Board - BIGGER! */}
+            <div className="flex-1">
+              <div className="w-full max-w-[700px] mx-auto aspect-square shadow-2xl rounded-lg overflow-hidden">
+                <Chessboard
+                  id="BasicBoard"
+                  position={game.fen()}
+                  onPieceDrop={onDrop}
+                  onSquareClick={onSquareClick}
+                  customSquareStyles={customSquareStyles}
+                  arePiecesDraggable={!aiThinking}
+                />
+              </div>
+
+              {/* Controls */}
+              <div className="mt-4 flex gap-4 justify-center">
+                <button
+                  onClick={resetGame}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                >
+                  New Game
+                </button>
+
+                <button
+                  onClick={() => {
+                    game.undo();
+                    if (playingAgainstAI) game.undo();
+                    setGame(new Chess(game.fen()));
+                    setSelectedSquare(null);
+                    setPossibleMoves([]);
+                    setLastMove({});
+                  }}
+                  disabled={aiThinking}
+                  className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Undo Move
+                </button>
+              </div>
+            </div>
+
+            {/* AI Chat Panel or Move History */}
+            {playingAgainstAI && chatVisible ? (
+              <div className="w-[350px] bg-slate-700 rounded-lg p-4">
+                <h2 className="text-xl font-bold text-white mb-4">
+                  💬 AI Commentary
+                </h2>
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {aiComments.map((comment, i) => (
+                    <div
+                      key={i}
+                      className="bg-slate-800 rounded-lg p-3 animate-fadeIn"
+                    >
+                      <p className="text-gray-200">{comment}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="w-[350px] bg-slate-700 rounded-lg p-4">
+                <h2 className="text-xl font-bold text-white mb-2">
+                  Move History
+                </h2>
+                <div className="text-gray-300 font-mono text-sm max-h-[600px] overflow-y-auto">
+                  {game.history().length === 0 ? (
+                    <p className="text-gray-500">No moves yet</p>
+                  ) : (
+                    <p>{game.history().join(", ")}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+
       {/* Game Over Modal */}
       {gameOver?.isOver && (
         <GameOverModal
