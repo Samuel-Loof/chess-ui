@@ -569,54 +569,127 @@ export class AIOpponent {
   private evaluateMove(game: Chess, move: any): number {
     // Make a copy and try the move
     const testGame = new Chess(game.fen());
-    testGame.move(move);
+    const testMove = testGame.move(move);
 
     let score = 0;
 
-    // 1. Material advantage (most important)
-    score += this.evaluatePosition(testGame) * -10; // Negative because we want black ahead
-
-    // 2. Checkmate is best!
+    // 1. CHECKMATE IS BEST (instant win)
     if (testGame.isCheckmate()) {
-      return 10000; // Instant win
+      return 100000;
     }
 
-    // 3. Check is good
-    if (testGame.isCheck()) {
-      score += 50;
+    // 2. MATERIAL EVALUATION (most important)
+    const materialScore = this.evaluatePosition(testGame);
+    score += materialScore * -100; // Heavily weight material
+
+    // 3. PIECE SAFETY - Don't hang pieces!
+    // Check if the piece we just moved is now attacked
+    const pieceOnSquare = testGame.get(move.to as any);
+    if (pieceOnSquare) {
+      const attackers = this.getAttackers(testGame, move.to, "w"); // White attackers
+      const defenders = this.getAttackers(testGame, move.to, "b"); // Black defenders
+
+      if (attackers.length > defenders.length) {
+        // Our piece is hanging!
+        const pieceValue = this.getPieceValue(pieceOnSquare.type);
+        score -= pieceValue * 200; // HUGE penalty for hanging pieces
+      }
     }
 
-    // 4. Capturing pieces is good
+    // 4. CAPTURE BONUS (but only if safe)
     if (move.captured) {
-      const pieceValues: { [key: string]: number } = {
-        p: 10,
-        n: 30,
-        b: 30,
-        r: 50,
-        q: 90,
-      };
-      score += pieceValues[move.captured] || 0;
+      const captureValue = this.getPieceValue(move.captured);
+      score += captureValue * 50;
     }
 
-    // 5. Center control is good (e4, d4, e5, d5)
-    const centerSquares = ["e4", "d4", "e5", "d5"];
-    if (centerSquares.includes(move.to)) {
-      score += 20;
+    // 5. CHECK (only if it leads somewhere)
+    if (testGame.isCheck()) {
+      // Check is only good if it's forcing
+      if (testGame.isCheckmate()) {
+        score += 10000; // Checkmate!
+      } else if (testGame.moves().length < 3) {
+        score += 100; // Forcing check (few escape squares)
+      } else {
+        score += 10; // Mild check (opponent has options)
+      }
     }
 
-    // 6. Develop pieces early (not pawns)
+    // 6. CENTER CONTROL (early game only)
+    if (game.history().length < 15) {
+      const centerSquares = ["e4", "d4", "e5", "d5"];
+      if (centerSquares.includes(move.to)) {
+        score += 30;
+      }
+    }
+
+    // 7. PIECE DEVELOPMENT (early game)
     if (game.history().length < 10 && move.piece !== "p") {
-      score += 15;
+      score += 25;
     }
 
-    // 7. Avoid moving into danger
-    testGame.undo();
-    const attacks = testGame.moves({ square: move.to, verbose: true });
-    if (attacks.length > 0) {
-      score -= 25; // Risky square
+    // 8. CASTLING BONUS
+    if (move.flags.includes("k") || move.flags.includes("q")) {
+      score += 100; // King safety is important
+    }
+
+    // 9. KING SAFETY
+    // Penalize moves that expose the king
+    const blackKingSquare = this.findKing(testGame, "b");
+    if (blackKingSquare) {
+      const kingAttackers = this.getAttackers(testGame, blackKingSquare, "w");
+      score -= kingAttackers.length * 50; // Penalty for exposed king
     }
 
     return score;
+  }
+
+  // Helper: Get piece value
+  private getPieceValue(piece: string): number {
+    const values: { [key: string]: number } = {
+      p: 1,
+      n: 3,
+      b: 3,
+      r: 5,
+      q: 9,
+      k: 0,
+    };
+    return values[piece] || 0;
+  }
+
+  // Helper: Find king position
+  private findKing(game: Chess, color: "w" | "b"): string | null {
+    const board = game.board();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const square = board[row][col];
+        if (square && square.type === "k" && square.color === color) {
+          return String.fromCharCode(97 + col) + (8 - row);
+        }
+      }
+    }
+    return null;
+  }
+
+  // Helper: Get all pieces attacking a square
+  private getAttackers(game: Chess, square: string, color: "w" | "b"): any[] {
+    const attackers: any[] = [];
+    const board = game.board();
+
+    // Check all squares for pieces that can attack this square
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        if (piece && piece.color === color) {
+          const from = String.fromCharCode(97 + col) + (8 - row);
+          const moves = game.moves({ square: from as any, verbose: true });
+          if (moves.some((m: any) => m.to === square)) {
+            attackers.push({ square: from, piece: piece.type });
+          }
+        }
+      }
+    }
+
+    return attackers;
   }
 
   // Simple position evaluation (positive = white ahead, negative = black ahead)
