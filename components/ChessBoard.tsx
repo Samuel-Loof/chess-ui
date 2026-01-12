@@ -489,7 +489,7 @@ export default function ChessBoard() {
         </div>
       )}
 
-      {/* GAME SCREEN - Larger board, cleaner layout */}
+      {/* GAME SCREEN - Fully responsive */}
       {(gameMode === "ai" && playingAgainstAI) || gameMode === "local" ? (
         <>
           {/* Back button */}
@@ -500,8 +500,8 @@ export default function ChessBoard() {
             ← Back to Menu
           </button>
 
-          {/* Game Status */}
-          <div className="bg-slate-700 rounded-lg p-4 mb-4 w-full max-w-[1200px]">
+          {/* Game Status - Full width */}
+          <div className="bg-slate-700 rounded-lg p-4 mb-4 w-full">
             <div className="flex justify-between items-center text-white">
               <span className="text-lg">
                 Turn:{" "}
@@ -526,10 +526,11 @@ export default function ChessBoard() {
             </div>
           </div>
 
-          <div className="flex gap-6 w-full max-w-[1200px]">
-            {/* Chess Board - BIGGER! */}
-            <div className="flex-1">
-              <div className="w-full max-w-[700px] mx-auto aspect-square shadow-2xl rounded-lg overflow-hidden">
+          {/* Main game area - Flexible grid */}
+          <div className="grid grid-cols-[1fr,auto] gap-6 w-full h-[calc(100vh-250px)]">
+            {/* Chess Board - Takes remaining space */}
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-full max-h-full aspect-square">
                 <Chessboard
                   id="BasicBoard"
                   position={game.fen()}
@@ -566,13 +567,13 @@ export default function ChessBoard() {
               </div>
             </div>
 
-            {/* AI Chat Panel or Move History */}
+            {/* AI Chat Panel or Move History - Fixed width sidebar */}
             {playingAgainstAI && chatVisible ? (
-              <div className="w-[350px] bg-slate-700 rounded-lg p-4">
+              <div className="w-80 bg-slate-700 rounded-lg p-4 flex flex-col">
                 <h2 className="text-xl font-bold text-white mb-4">
                   💬 AI Commentary
                 </h2>
-                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                <div className="space-y-3 flex-1 overflow-y-auto">
                   {aiComments.map((comment, i) => (
                     <div
                       key={i}
@@ -584,11 +585,11 @@ export default function ChessBoard() {
                 </div>
               </div>
             ) : (
-              <div className="w-[350px] bg-slate-700 rounded-lg p-4">
+              <div className="w-80 bg-slate-700 rounded-lg p-4 flex flex-col">
                 <h2 className="text-xl font-bold text-white mb-2">
                   Move History
                 </h2>
-                <div className="text-gray-300 font-mono text-sm max-h-[600px] overflow-y-auto">
+                <div className="text-gray-300 font-mono text-sm flex-1 overflow-y-auto">
                   {game.history().length === 0 ? (
                     <p className="text-gray-500">No moves yet</p>
                   ) : (
